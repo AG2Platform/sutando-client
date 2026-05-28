@@ -1,12 +1,64 @@
 # `@sutando/client`
 
-Sutando's React frontend. Hosts the **conversation** page — the chat shell that fronts the voice agent, task stream, and dynamic content panels. Other Sutando surfaces (core-cli, dashboard, settings) live elsewhere: the Python dashboard at `:7844`, the macOS panes in `src/Sutando/UnifiedMainWindow.swift`.
+Sutando's React frontend — the conversation page that fronts the voice
+agent, task stream, and dynamic content panels.
 
-`GET /` serves this React bundle. `GET /v2[/*]` is an alias kept for old bookmarks. The legacy inline-HTML client (`/legacy`, `src/web-client-html.ts`) was removed once the React tree burned in.
+This repo is one implementation of the
+[Sutando wire contract](./WIRE.md). The companion server lives at
+[**sutando**](https://github.com/sonichi/sutando); any backend that
+honors `WIRE.md` can serve this UI, and anyone can replace this UI with
+their own as long as it honors `WIRE.md`.
+
+## Standalone build
+
+```bash
+pnpm install
+pnpm build       # writes ./dist/
+```
+
+Point a running Sutando voice-agent at the built bundle:
+
+```bash
+CLIENT_DIST_DIR=/abs/path/to/sutando-client/dist bash <sutando-repo>/src/startup.sh
+```
+
+## Standalone dev
+
+```bash
+pnpm dev         # vite dev server on http://localhost:5173
+```
+
+The dev server expects a Sutando voice-agent to be running so the page
+can hit `/sse-status`, `/voice-mode`, etc. If the agent is on a
+non-default origin, pass query overrides:
+
+```
+http://localhost:5173/?api=http://localhost:8080&agent-api=http://localhost:7843
+```
+
+## Used as a git submodule inside sutando
+
+In the canonical sutando installation, this repo is checked out at
+`sutando/client/` as a git submodule. `pnpm install` at the sutando root
+picks the directory up as a workspace package automatically.
+
+```bash
+git clone --recurse-submodules https://github.com/sonichi/sutando.git
+cd sutando
+pnpm install
+pnpm build:client    # equivalent to running `pnpm build` here
+```
+
+If you already cloned without `--recurse-submodules`:
+
+```bash
+git submodule update --init --recursive
+```
 
 ## Architecture
 
-Follows `CLAUDE.md § Frontend Conventions`:
+Follows the conventions in
+[`sutando/CLAUDE.md` § Frontend Conventions](https://github.com/sonichi/sutando/blob/main/CLAUDE.md):
 
 | Layer | Purpose | Size budget |
 |-------|---------|-------------|
@@ -28,29 +80,26 @@ Follows `CLAUDE.md § Frontend Conventions`:
 
 ## Routing
 
-Only one route today (`conversation`), so there's no `react-router`. `src/lib/config.ts` parses `?page=` into `initialRouteId` (default `conversation`) so the shell is ready when additional panes land; until then `App.tsx` mounts `ConversationPage` unconditionally.
+One route today (`conversation`), so there's no `react-router`.
+`src/lib/config.ts` parses `?page=` into `initialRouteId` (default
+`conversation`) so the shell is ready when additional panes land;
+until then `App.tsx` mounts `ConversationPage` unconditionally.
 
 ## Server-agnostic config
 
-`src/lib/config.ts` resolves the WebSocket URL + API origin at runtime by:
+`src/lib/config.ts` resolves the WebSocket URL + API origins at runtime:
 
-1. `?ws=` / `?api=` query string (highest priority).
-2. `window.__SUTANDO_CONFIG__` (injected by the host shell).
-3. `window.location.host` (default — works for desktop WKWebView, remote browser over Tailscale, and the future mobile thin-client without rebuilding).
+1. `?ws=` / `?api=` / `?agent-api=` query string (highest priority)
+2. `window.__SUTANDO_CONFIG__` (injected by the host shell)
+3. `window.location.host` (default — works for desktop WKWebView, remote
+   browser over Tailscale, and a future mobile thin-client without
+   rebuilding)
 
-## Build
+## Contributing
 
-```bash
-pnpm install            # only on the first run; runs at repo root, not in client/
-pnpm --filter @sutando/client build  # writes client/dist/
-```
+PRs welcome. If you change the wire shape (endpoints, SSE event names,
+request/response payloads), update
+[`WIRE.md`](./WIRE.md) in the same PR — that file is the contract this
+UI shares with every Sutando backend.
 
-`src/web-server.ts` serves `client/dist/index.html` + hashed assets at `/` and `/v2`. When the bundle isn't built yet, both routes return a `503` with a one-line `pnpm install && pnpm build:client` hint.
-
-## Dev workflow
-
-```bash
-pnpm --filter @sutando/client dev    # vite dev server on http://localhost:5173
-```
-
-The dev server expects `voice-agent.ts` to be running so the conversation page can hit `/sse-status` etc. Pass `?api=http://localhost:8080` if the Vite dev server is on a different origin than the API.
+License: [MIT](./LICENSE)
